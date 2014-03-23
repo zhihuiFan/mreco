@@ -5,45 +5,44 @@
 #include <boost/filesystem.hpp>
 #include <fcntl.h>
 
-DiskLoc Record::nextInExtent(const DiskLoc &myLoc){
-    if (_nextOfs == DiskLoc::NullOfs)
-        return DiskLoc();
-    assert(_nextOfs);
-    return DiskLoc(myLoc.a(), _nextOfs);
+DiskLoc Record::nextInExtent(const DiskLoc &myLoc) {
+  if (_nextOfs == DiskLoc::NullOfs) return DiskLoc();
+  assert(_nextOfs);
+  return DiskLoc(myLoc.a(), _nextOfs);
 }
-  Record * Extent::getRecord(DiskLoc dl) {
-    assert(!dl.isNull());
-    assert(dl.a() == myLoc.a());
-    int x = dl.getOfs() - myLoc.getOfs();
-    assert(x > 0);
-    return (Record *)(((char *)this) + x);
+Record *Extent::getRecord(DiskLoc dl) {
+  assert(!dl.isNull());
+  assert(dl.a() == myLoc.a());
+  int x = dl.getOfs() - myLoc.getOfs();
+  assert(x > 0);
+  return (Record *)(((char *)this) + x);
+}
+void Extent::dumpRows() {
+  DiskLoc cur = firstRecord;
+  mongo::DBClientConnection target;  // we will store the recovered data here
+  try {
+    target.connect("phx7b01c-709495.stratus.phx.ebay.com");
   }
-  void Extent::dumpRows() {
-    DiskLoc cur = firstRecord;
-    mongo::DBClientConnection target;  // we will store the recovered data here
-    try {
-      target.connect("phx7b01c-709495.stratus.phx.ebay.com");
-    }
-    catch (const mongo::DBException &e) {
-      cout << "connect error " << endl;
-      return;
-    }
-    do {
-      Record *r = getRecord(cur);
-      cout << "Recovered " << rownum++ << " Rows" << endl;
+  catch (const mongo::DBException &e) {
+    cout << "connect error " << endl;
+    return;
+  }
+  do {
+    Record *r = getRecord(cur);
+    cout << "Recovered " << rownum++ << " Rows" << endl;
 
-      try {
-        mongo::BSONObj o(r->data());
-        target.insert("mreco.reco", o);
-      }
-      catch (bson::assertion &e) {
-        cout << e.what();
-        cur.setloc(cur.a(), r->_nextOfs);
-        continue;
-      }
+    try {
+      mongo::BSONObj o(r->data());
+      target.insert("mreco.reco", o);
+    }
+    catch (bson::assertion &e) {
+      cout << e.what();
       cur.setloc(cur.a(), r->_nextOfs);
-    } while (cur != lastRecord);
-  }
+      continue;
+    }
+    cur.setloc(cur.a(), r->_nextOfs);
+  } while (cur != lastRecord);
+}
 void *Database::fmap(string &filename, size_t len) {
   int fd = open(filename.c_str(), O_RDONLY);
   assert(fd > 0);

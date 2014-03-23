@@ -29,7 +29,7 @@ class DiskLoc {
 
   bool isNull() const { return _a == -1; }
   int getOfs() const { return ofs; }
-  int a() const { return _a;}
+  int a() const { return _a; }
   void setloc(int a, int of) {
     _a = a;
     ofs = of;
@@ -43,6 +43,7 @@ class DiskLoc {
     ofs = b.ofs;
     return *this;
   }
+
  private:
   int _a;
   int ofs;
