@@ -8,5 +8,6 @@
 #include <string>
 #include <cassert>
 #include <cstdlib>
+#include <list>
 
 using namespace std;
