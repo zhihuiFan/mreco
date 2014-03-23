@@ -2,10 +2,8 @@
 #include <mongo/bson/bson.h>
 #include <mongo/bson/bsonobj.h>
 #include <mongo/bson/bsonelement.h>
-#include <mongo/client/dbclient.h>
 
 const int Buckets = 19;
-//size_t rownum = 1;
 #pragma pack(1)
 class Namespace {
  public:
