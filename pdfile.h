@@ -5,7 +5,7 @@
 #include <mongo/client/dbclient.h>
 
 const int Buckets = 19;
-size_t rownum = 1;
+//size_t rownum = 1;
 #pragma pack(1)
 class Namespace {
  public:
@@ -83,7 +83,7 @@ class Extent {
 
   Record *getRecord(DiskLoc dl);
 
-  void dumpRows();
+  void dumpRows(list<mongo::BSONObj> &);
 };
 
 class Collection {

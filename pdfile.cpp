@@ -17,23 +17,14 @@ Record *Extent::getRecord(DiskLoc dl) {
   assert(x > 0);
   return (Record *)(((char *)this) + x);
 }
-void Extent::dumpRows() {
+void Extent::dumpRows(list<mongo::BSONObj> &store) {
   DiskLoc cur = firstRecord;
-  mongo::DBClientConnection target;  // we will store the recovered data here
-  try {
-    target.connect("phx7b01c-709495.stratus.phx.ebay.com");
-  }
-  catch (const mongo::DBException &e) {
-    cout << "connect error " << endl;
-    return;
-  }
   do {
     Record *r = getRecord(cur);
-    cout << "Recovered " << rownum++ << " Rows" << endl;
 
     try {
       mongo::BSONObj o(r->data());
-      target.insert("mreco.reco", o);
+      store.push_back(o);
     }
     catch (bson::assertion &e) {
       cout << e.what();
@@ -92,7 +83,6 @@ void Database::nsscan() {
   assert(nslen > 0);
   ns = fmap(nss, nslen);
   int chunksize = sizeof(chunk);
-  // char buf[chunksize];
   size_t curops = 0;
   while (curops < nslen) {
     if (curops + chunksize > nslen) {
@@ -114,34 +104,23 @@ Extent *Database::builtExt(DiskLoc &loc) {
   return (Extent *)(mapfiles[loc.a()] + loc.getOfs());
 }
 
+/* 
 int main(int argc, char **argv) {
-  // cout << "chunk size " << sizeof(chunk) << endl;
   Database d(argv[1]);
-  // cout << d.getName() << endl;
   int numfile = d.filesize.size();
   vector<string> colls;
   d.getallns(colls);
-  /*
-  for(vector<string>::iterator it = colls.begin(); it!=colls.end(); it++)
-      // really stupid here, but can't use c++11 now.
-      cout<<"collection " <<*it<<":" << it->size()<<endl;
-  */
   string f("cmiaas.$freelist");
   f.insert(f.end(), 128 - f.size(), '\0');
   Collection *freelist = d.getns(f);
-  // cout << "Dump freelist of Database " << d.getName() << endl;
   DiskLoc cur = freelist->firstExt;
-  // UNDERSTANDY: why the following doesn't work
-  // DiskLoc& cur = freelist->firstExt;
   int i = 1;
   while (cur != freelist->lastExt) {
-    // cout << "Extent " << i++ << " ";
-    cur.dump();
     Extent *e = d.builtExt(cur);
     e->dumpRows();
     assert(e->myLoc == cur);
     cur = e->xnext;
   }
-  // cout << "Extent " << i << " ";
   freelist->lastExt.dump();
 }
+*/
