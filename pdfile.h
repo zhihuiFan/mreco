@@ -61,11 +61,7 @@ class Record {
  public:
   const char *data() const { return _data; }
   char *data() { return _data; }
-  DiskLoc nextInExtent(const DiskLoc &myLoc) {
-    if (_nextOfs == DiskLoc::NullOfs) return DiskLoc();
-    assert(_nextOfs);
-    return DiskLoc(myLoc.a(), _nextOfs);
-  }
+  DiskLoc nextInExtent(const DiskLoc &myLoc);
 };
 
 class Extent {
@@ -84,40 +80,9 @@ class Extent {
   DiskLoc lastRecord;
   char _extentData[4];
 
-  Record *getRecord(DiskLoc dl) {
-    assert(!dl.isNull());
-    assert(dl.a() == myLoc.a());
-    int x = dl.getOfs() - myLoc.getOfs();
-    assert(x > 0);
-    return (Record *)(((char *)this) + x);
-  }
+  Record *getRecord(DiskLoc dl);
 
-  void dumpRows() {
-    DiskLoc cur = firstRecord;
-    mongo::DBClientConnection target;  // we will store the recovered data here
-    try {
-      target.connect("phx7b01c-709495.stratus.phx.ebay.com");
-    }
-    catch (const mongo::DBException &e) {
-      cout << "connect error " << endl;
-      return;
-    }
-    do {
-      Record *r = getRecord(cur);
-      cout << "Recovered " << rownum++ << " Rows" << endl;
-
-      try {
-        mongo::BSONObj o(r->data());
-        target.insert("mreco.reco", o);
-      }
-      catch (bson::assertion &e) {
-        cout << e.what();
-        cur.setloc(cur.a(), r->_nextOfs);
-        continue;
-      }
-      cur.setloc(cur.a(), r->_nextOfs);
-    } while (cur != lastRecord);
-  }
+  void dumpRows();
 };
 
 class Collection {
