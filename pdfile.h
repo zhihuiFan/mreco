@@ -23,14 +23,13 @@ class DiskLoc {
     NullOfs = -1,
     MaxFiles = 16000
   };
-  int _a;
-  int ofs;
 
   DiskLoc(int a, int ofs) : _a(a), ofs(ofs) {}
   DiskLoc() : _a(-1), ofs(0) {}
 
   bool isNull() const { return _a == -1; }
   int getOfs() const { return ofs; }
+  int a() const { return _a;}
   void setloc(int a, int of) {
     _a = a;
     ofs = of;
@@ -44,6 +43,9 @@ class DiskLoc {
     ofs = b.ofs;
     return *this;
   }
+ private:
+  int _a;
+  int ofs;
 };
 
 class Record {
@@ -62,7 +64,7 @@ class Record {
   DiskLoc nextInExtent(const DiskLoc &myLoc) {
     if (_nextOfs == DiskLoc::NullOfs) return DiskLoc();
     assert(_nextOfs);
-    return DiskLoc(myLoc._a, _nextOfs);
+    return DiskLoc(myLoc.a(), _nextOfs);
   }
 };
 
@@ -84,7 +86,7 @@ class Extent {
 
   Record *getRecord(DiskLoc dl) {
     assert(!dl.isNull());
-    assert(dl._a == myLoc._a);
+    assert(dl.a() == myLoc.a());
     int x = dl.getOfs() - myLoc.getOfs();
     assert(x > 0);
     return (Record *)(((char *)this) + x);
@@ -110,10 +112,10 @@ class Extent {
       }
       catch (bson::assertion &e) {
         cout << e.what();
-        cur.setloc(cur._a, r->_nextOfs);
+        cur.setloc(cur.a(), r->_nextOfs);
         continue;
       }
-      cur.setloc(cur._a, r->_nextOfs);
+      cur.setloc(cur.a(), r->_nextOfs);
     } while (cur != lastRecord);
   }
 };
