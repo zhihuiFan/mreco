@@ -137,12 +137,10 @@ class Database {
   // TODO:  add contructor and destructor
   // find the .freelist extention's diskloc
  public:
-  Database(string db) : _db(db) {
+  Database(string &path, string &db) : _path(path), _db(db) {
     openAll();
     nsscan();
   }
-  void openAll();
-  void nsscan();  // scan db.ns file
   string &getName() { return _db; }
   Collection *getns(string ns) { return colls[ns]; }
   void getallns(vector<string> &allns);
@@ -151,10 +149,13 @@ class Database {
   vector<void *> mapfiles;
   vector<size_t> filesize;
 
- protected:
-  string _db;
+ private:
+  void openAll();
+  void nsscan();  // scan db.ns file
 
  private:
+  string _db;
+  string _path;
   map<string, Collection *> colls;
   void *ns;  // Point to db.ns
   size_t nslen;
