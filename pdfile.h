@@ -162,20 +162,3 @@ class Database {
   void *fmap(string &filename, size_t len);
   size_t flen(string &filename);
 };
-
-class fileGenerator {
- public:
-  fileGenerator(string &db, int n) : _db(db), _n(n) {}
-  void generate(vector<string> &files) {
-    ostringstream f;
-    for (int i = 0; i < _n; i++) {
-      f.str("");
-      f << _db << "." << i;
-      files[i] = f.str();
-    }
-  }
-
- private:
-  string _db;
-  int _n;
-};

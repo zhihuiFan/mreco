@@ -2,8 +2,9 @@
 #include <sys/mman.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <boost/filesystem.hpp>
 #include <fcntl.h>
+#include <boost/filesystem.hpp>
+#include <boost/regex.hpp>
 
 DiskLoc Record::nextInExtent(const DiskLoc &myLoc) {
   if (_nextOfs == DiskLoc::NullOfs) return DiskLoc();
@@ -56,15 +57,25 @@ size_t Database::flen(string &filename) {
 }
 
 void Database::openAll() {
-  int n = 11;
-  filesize.resize(n);
-  mapfiles.resize(n);
-  vector<string> filename(n);
-  fileGenerator(_db, n).generate(filename);
+  vector<string> files;
+  ostringstream o;
+  o << "(^" << _db << "\\.[0-9]+)";
+  const boost::regex reg(o.str().c_str());
+
+  boost::filesystem::path Path(_path);
+  boost::filesystem::directory_iterator end;
+
+  for (boost::filesystem::directory_iterator i(Path); i != end; i++) {
+    const char *filename = i->path.filename().string().c_str();
+    if (boost::regex_search(filename, reg)) files.push_back(string(filename));
+  }
+  int n = files.size();
+  filesize.reserve(n);
+  mapfiles.reserve(n);
   for (int i = 0; i < n; ++i) {
-    size_t len = flen(filename[i]);
+    size_t len = flen(files[i]);
     assert(len > 0);
-    void *p = fmap(filename[i], len);
+    void *p = fmap(files[i], len);
     mapfiles[i] = p;
     filesize[i] = len;
   }
@@ -104,7 +115,7 @@ Extent *Database::builtExt(DiskLoc &loc) {
   return (Extent *)(mapfiles[loc.a()] + loc.getOfs());
 }
 
-/* 
+/*
 int main(int argc, char **argv) {
   Database d(argv[1]);
   int numfile = d.filesize.size();
