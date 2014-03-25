@@ -28,7 +28,7 @@ void Extent::dumpRows(list<mongo::BSONObj> &store) {
       store.push_back(o);
     }
     catch (bson::assertion &e) {
-      cout << e.what();
+      //cout << e.what();
       cur.setloc(cur.a(), r->_nextOfs);
       continue;
     }
