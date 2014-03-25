@@ -159,6 +159,6 @@ class Database {
   map<string, Collection *> colls;
   void *ns;  // Point to db.ns
   size_t nslen;
-  void *fmap(string &filename, size_t len);
-  size_t flen(string &filename);
+  void *fmap(const string &filename, size_t len);
+  size_t flen(const string &filename);
 };

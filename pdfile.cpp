@@ -35,7 +35,8 @@ void Extent::dumpRows(list<mongo::BSONObj> &store) {
     cur.setloc(cur.a(), r->_nextOfs);
   } while (cur != lastRecord);
 }
-void *Database::fmap(string &filename, size_t len) {
+
+void *Database::fmap(const string &filename, size_t len) {
   int fd = open(filename.c_str(), O_RDONLY);
   assert(fd > 0);
   void *p = mmap(NULL, len, PROT_READ, MAP_PRIVATE, fd, 0);
@@ -44,7 +45,7 @@ void *Database::fmap(string &filename, size_t len) {
   return p;
 }
 
-size_t Database::flen(string &filename) {
+size_t Database::flen(const string &filename) {
   size_t len;
   try {
     len = boost::filesystem::file_size(filename);
@@ -57,25 +58,27 @@ size_t Database::flen(string &filename) {
 }
 
 void Database::openAll() {
-  vector<string> files;
   ostringstream o;
   o << "(^" << _db << "\\.[0-9]+)";
   const boost::regex reg(o.str().c_str());
 
-  boost::filesystem::path Path(_path);
+  boost::filesystem::path Path(_path.c_str());
   boost::filesystem::directory_iterator end;
 
+  int n = 0;
   for (boost::filesystem::directory_iterator i(Path); i != end; i++) {
-    const char *filename = i->path.filename().string().c_str();
-    if (boost::regex_search(filename, reg)) files.push_back(string(filename));
+    const char *filename = i->path().filename().string().c_str();
+    if (boost::regex_search(filename, reg)) n++;
   }
-  int n = files.size();
   filesize.reserve(n);
   mapfiles.reserve(n);
   for (int i = 0; i < n; ++i) {
-    size_t len = flen(files[i]);
+    ostringstream format;
+    format << _path << _db << "." << i;
+    string fullname = format.str();
+    size_t len = flen(fullname);
     assert(len > 0);
-    void *p = fmap(files[i], len);
+    void *p = fmap(fullname, len);
     mapfiles[i] = p;
     filesize[i] = len;
   }
@@ -89,8 +92,8 @@ void Database::getallns(vector<string> &v) {
 }
 
 void Database::nsscan() {
-  string nss = _db + ".ns";
-  nslen = flen(nss);
+  string nss = _path + _db + ".ns";
+  size_t nslen = flen(nss);
   assert(nslen > 0);
   ns = fmap(nss, nslen);
   int chunksize = sizeof(chunk);
@@ -102,7 +105,7 @@ void Database::nsscan() {
     }
     int hv = *(int *)(ns + curops);
     if (hv) {
-      string coll((char *)ns + curops + sizeof(int), 128);
+      string coll((char *)ns + curops + sizeof(int));
       Collection *nsp = (Collection *)((char *)ns + curops + sizeof(int) + 128);
       colls.insert(pair<string, Collection *>(coll, nsp));
     }
