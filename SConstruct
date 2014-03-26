@@ -4,6 +4,7 @@ dul = Environment(CXXFLAGS=["-w","-ggdb"],
                 CPPPATH='/opt/mongo-2.2.2/include'
                 )
 dul.Program('mreco', ['pdfile.cpp', 'mreco.cpp'])
+dul.Program('t2.bin', 't2.cpp')
 
 
 test = Environment(CXXFLAGS=["-w","-ggdb"],

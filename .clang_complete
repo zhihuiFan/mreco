@@ -1,3 +1,3 @@
 -Qunused-arguments
 -I/usr/local/include
--I/opt/mongo-2.2.2/include/mongo
+-I/opt/mongo-2.2.2/include/
