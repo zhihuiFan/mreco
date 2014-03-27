@@ -12,7 +12,7 @@ DiskLoc Record::nextInExtent(const DiskLoc &myLoc) {
   return DiskLoc(myLoc.a(), _nextOfs);
 }
 Record *Extent::getRecord(DiskLoc dl) {
-  assert(!dl.isNull());
+  if (dl.getOfs() == DiskLoc::NullOfs || dl.isNull()) return NULL;
   assert(dl.a() == myLoc.a());
   int x = dl.getOfs() - myLoc.getOfs();
   assert(x > 0);
@@ -22,6 +22,7 @@ void Extent::dumpRows(list<mongo::BSONObj> &store) {
   DiskLoc cur = firstRecord;
   do {
     Record *r = getRecord(cur);
+    if (r == NULL) break;
 
     try {
       mongo::BSONObj o(r->data());
@@ -32,8 +33,9 @@ void Extent::dumpRows(list<mongo::BSONObj> &store) {
       cur.setloc(cur.a(), r->_nextOfs);
       continue;
     }
+    if (cur == lastRecord) break;
     cur.setloc(cur.a(), r->_nextOfs);
-  } while (cur != lastRecord);
+  } while (1);
 }
 
 void *Database::fmap(const string &filename, size_t len) {
