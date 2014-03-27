@@ -108,8 +108,8 @@ int main(int argc, char **argv) {
             "message are printed from BSON libary, so I can't avoid them"
          << endl;
     cout << endl << "Note:  the program will recover all the data "
-                    "which was dropped in the given database,  it have "
-                    "nothing with the --coll option" << endl;
+                    "which was dropped in the given database" << endl;
+
     return 0;
   }
 
