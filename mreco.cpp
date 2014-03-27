@@ -168,8 +168,10 @@ int main(int argc, char **argv) {
         }
       }
     }
-    cout << currentDateTime() << " Recovered " << data.size()
-         << " rows in this extent " << endl;
+    if (!data.empty()) {
+      cout << currentDateTime() << " Recovered " << data.size()
+           << " rows in this extent " << endl;
+    }
     if (cur == freelist->lastExt) break;
     cur = e->xnext;
   } while (1);
