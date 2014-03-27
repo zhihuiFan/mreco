@@ -119,24 +119,3 @@ Extent *Database::builtExt(DiskLoc &loc) {
   assert(mapfiles[loc.a()]);
   return (Extent *)(mapfiles[loc.a()] + loc.getOfs());
 }
-
-/*
-int main(int argc, char **argv) {
-  Database d(argv[1]);
-  int numfile = d.filesize.size();
-  vector<string> colls;
-  d.getallns(colls);
-  string f("cmiaas.$freelist");
-  f.insert(f.end(), 128 - f.size(), '\0');
-  Collection *freelist = d.getns(f);
-  DiskLoc cur = freelist->firstExt;
-  int i = 1;
-  while (cur != freelist->lastExt) {
-    Extent *e = d.builtExt(cur);
-    e->dumpRows();
-    assert(e->myLoc == cur);
-    cur = e->xnext;
-  }
-  freelist->lastExt.dump();
-}
-*/
