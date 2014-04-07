@@ -39,9 +39,9 @@ void Extent::dumpRows(list<mongo::BSONObj> &store) {
 }
 
 void *Database::fmap(const string &filename, size_t len) {
-  int fd = open(filename.c_str(), O_RDONLY);
+  int fd = open(filename.c_str(), O_RDWR);
   assert(fd > 0);
-  void *p = mmap(NULL, len, PROT_READ, MAP_PRIVATE, fd, 0);
+  void *p = mmap(NULL, len, PROT_WRITE, MAP_PRIVATE, fd, 0);
   close(fd);
   assert(p != MAP_FAILED);
   return p;
