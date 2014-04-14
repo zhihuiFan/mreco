@@ -81,8 +81,8 @@ void Database::openAll() {
     size_t len = flen(fullname);
     assert(len > 0);
     void *p = fmap(fullname, len);
-    mapfiles[i] = p;
-    filesize[i] = len;
+    mapfiles.push_back(p);
+    filesize.push_back(len);
   }
 }
 
@@ -115,7 +115,12 @@ void Database::nsscan() {
   }
 }
 
-Extent *Database::builtExt(DiskLoc &loc) {
+Extent *Database::builtExt(const DiskLoc &loc) {
   assert(mapfiles[loc.a()]);
   return (Extent *)(mapfiles[loc.a()] + loc.getOfs());
+}
+
+Record *Database::builtRow(const DiskLoc &loc) {
+  if (loc.isNull()) return NULL;
+  return (Record *)(mapfiles[loc.a()] + loc.getOfs());
 }

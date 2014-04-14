@@ -1,3 +1,5 @@
+#ifndef _H_PDFILE
+#define _H_PDFILE
 #include "header.h"
 #include <mongo/bson/bson.h>
 #include <mongo/bson/bsonobj.h>
@@ -61,6 +63,14 @@ class Record {
   const char *data() const { return _data; }
   char *data() { return _data; }
   DiskLoc nextInExtent(const DiskLoc &myLoc);
+  int datalen() const { return _lengthWithHeaders - 16; }
+};
+
+class DeletedRecord {
+ public:
+  int _lengthWithHeaders;
+  int _extentOfs;
+  DiskLoc _nextDeleted;
 };
 
 class Extent {
@@ -144,7 +154,8 @@ class Database {
   string &getName() { return _db; }
   Collection *getns(string ns) { return colls[ns]; }
   void getallns(vector<string> &allns);
-  Extent *builtExt(DiskLoc &loc);
+  Extent *builtExt(const DiskLoc &loc);
+  Record *builtRow(const DiskLoc &loc);
 
   vector<void *> mapfiles;
   vector<size_t> filesize;
@@ -162,3 +173,4 @@ class Database {
   void *fmap(const string &filename, size_t len);
   size_t flen(const string &filename);
 };
+#endif

@@ -1,4 +1,5 @@
 #include "pdfile.h"
+#include "mreco.h"
 #include <mongo/client/dbclient.h>
 #include <boost/program_options.hpp>
 #include <unistd.h>
@@ -12,11 +13,10 @@ const string currentDateTime() {
   char buf[80];
   tstruct = *localtime(&now);
   strftime(buf, sizeof(buf), "%Y-%m-%d.%X", &tstruct);
-
   return buf;
 }
 
-mongo::BSONObj rename_id(mongo::BSONObj &input, const char *newfield) {
+mongo::BSONObj rename_id(const mongo::BSONObj &input, const char *newfield) {
   if (!input.hasField("_id")) return input;
   mongo::BSONObjBuilder builder;
   builder.appendElements(input);
@@ -68,8 +68,57 @@ mongo::BSONObj rename_id(mongo::BSONObj &input, const char *newfield) {
   return tmp.removeField("_id");
 }
 
+writer::writer(const string &target, const string &coll, string &nid)
+    : _coll(coll), _dcoll(coll + "Dup"), _nid(nid) {
+
+  try {
+    _conn.connect(target.c_str());
+  }
+  catch (mongo::DBException &e) {
+    cout << "connect to target ERROR: " << e.what() << endl;
+    std::exit(1);
+  }
+
+  if (_conn.count(_coll) != 0 || _conn.count(_dcoll) != 0) {
+    cout << _coll << " or " << _dcoll << " is not empty! ";
+    cout << " Please choose another collect to store the data " << endl;
+    std::exit(2);
+  }
+}
+
+void writer::save(const mongo::BSONObj &data) {
+  const string ierr("invalid bson");
+  const string dupError("E11000 duplicate key error");
+  _conn.insert(_coll, data);
+  string err = _conn.getLastError();
+  if (!err.empty()) {
+    if (err.find(dupError) != string::npos) {
+      if (data.hasField(_nid.c_str())) {
+        cout << "some of the recorded data have " << _nid << "fileds\n";
+        cout << "please used a different nid with --nid option to recover";
+        cout << "exiting now.. " << endl;
+        std::exit(2);
+      }
+      mongo::BSONObj nobj = rename_id(data, _nid.c_str());
+      _conn.insert(_dcoll, nobj);
+    } else if (err.find(ierr) != string::npos) {
+      throw 1;  // we may calcluated a wrong bson length, will try again
+    } else {
+      cout << "Inert Error " << err << endl;
+      std::exit(4);
+    }
+  }
+}
+
+void writer::save(const list<mongo::BSONObj> &data) {
+  list<mongo::BSONObj>::const_iterator end = data.end();
+  for (list<mongo::BSONObj>::const_iterator it = data.begin(); it != end; ++it)
+    save(*it);
+}
+
 int main(int argc, char **argv) {
   string dbpath, dbname, target, collection;
+  string delcoll;
   // if there are more than 1 rows with the same _id, only the 1st will be
   // inserted into collection
   // the _id filed will be changed to "nid" for the rest rows, and stored in
@@ -79,6 +128,8 @@ int main(int argc, char **argv) {
 
   po::options_description desc("Allowed options");
   desc.add_options()("help,h", "show this message and exit")(
+      "deleted", "recover deleted rows")("dcoll", po::value<string>(&delcoll),
+                                         "target collection for delete rows")(
       "dbpath,p", po::value<string>(&dbpath),
       "MUST, datafile directory, if directoryperdb, specify one directory "
       "once")("db", po::value<string>(&dbname),
@@ -114,77 +165,94 @@ int main(int argc, char **argv) {
   }
 
   if (count(collection.begin(), collection.end(), '.') != 1) {
-    cerr << "format -c db.collection" << endl;
+    cout << "format -c db.collection" << endl;
     return -1;
   }
 
-  mongo::DBClientConnection tconn;
-  try {
-    tconn.connect(target.c_str());
-  }
-  catch (mongo::DBException &e) {
-    cout << "connect to target ERROR: " << e.what() << endl;
-    return -1;
-  }
+  writer writer(target, collection, nid);
 
   if (dbpath[dbpath.size() - 1] != '/') dbpath.push_back('/');
 
   Database db(dbpath, dbname);
-  string fl = dbname + ".$freelist";
-  Collection *freelist = db.getns(fl);
-
-  DiskLoc cur = freelist->firstExt;
-
-  string dupError("E11000 duplicate key error");
-  string collDup = collection + "Dup";
-
-  if (tconn.count(collection) != 0 || tconn.count(collDup) != 0) {
-    cerr << collection << " or " << collDup << " is not empty! ";
-    cerr << " Please choose another collect to store the data " << endl;
-    return -2;
-  }
 
   time_t start = time(0);
-  do {
-    list<mongo::BSONObj> data;
-    Extent *e = db.builtExt(cur);
-    e->dumpRows(data);
-    list<mongo::BSONObj>::iterator end = data.end();
-    for (list<mongo::BSONObj>::iterator it = data.begin(); it != end; it++) {
-      tconn.insert(collection.c_str(), *it);
-      string err = tconn.getLastError();
-      if (!err.empty()) {
-        if (err.find(dupError) != string::npos) {
-          if (it->hasField(nid.c_str())) {
-            cout << "some of the recorded data have " << nid << "fileds\n";
-            cout << "please used a different nid with --nid option to recover";
-            cout << "exiting now.. " << endl;
-            return -3;
+  if (vm.count("deleted")) {
+    // reocver deleted rows
+    if (!vm.count("dcoll")) {
+      cout << "you must specify --dcoll=db.collection if used --deleted"
+           << endl;
+      return -3;
+    }
+    if (count(delcoll.begin(), delcoll.end(), '.') != 1) {
+      cout << "format --dcoll=db.collection" << endl;
+    }
+    Collection *target = db.getns(delcoll);
+    for (int i = 0; i < Buckets; ++i) {
+      Record *r = db.builtRow(target->deletedList[i]);
+      if (r == NULL) {
+        continue;
+      }
+      int i = 0;
+      while (1) {
+        int len = r->datalen();
+        const int clen = len;
+        for (int i = clen - 1; i >= 0; --i) {
+          if (*(char *)(r->data() + i) == 0) {
+            len--;
+          } else {
+            break;
           }
-          mongo::BSONObj nobj = rename_id(*it, nid.c_str());
-        } else {
-          cerr << "insert Error " << err << endl;
-          return -4;
         }
+        reinterpret_cast<unsigned *>(r->data())[0] = len + 1;
+        mongo::BSONObj o(r->data());
+        if (!o.firstElement().eoo()) {
+          try {
+            writer.save(o);
+          }
+          catch (int &i) {
+            if (i == 1) {
+              reinterpret_cast<unsigned *>(r->data())[0] = len + 2;
+              mongo::BSONObj o(r->data());
+              writer.save(o);
+            }
+          }
+        }
+        DeletedRecord *drec = (DeletedRecord *)r;
+        if (drec->_nextDeleted.isNull()) {
+          break;
+        }
+        r = db.builtRow(drec->_nextDeleted);
       }
     }
-    if (!data.empty()) {
-      cout << currentDateTime() << " Recovered " << data.size()
-           << " rows in this extent " << endl;
-    }
-    if (cur == freelist->lastExt) break;
-    cur = e->xnext;
-  } while (1);
+  } else {
+    // recover dropped collection
+    string fl = dbname + ".$freelist";
+    Collection *freelist = db.getns(fl);
+
+    DiskLoc cur = freelist->firstExt;
+    do {
+      list<mongo::BSONObj> data;
+      Extent *e = db.builtExt(cur);
+      e->dumpRows(data);
+      writer.save(data);
+      if (!data.empty()) {
+        cout << currentDateTime() << " Recovered " << data.size()
+             << " rows in this extent " << endl;
+      }
+      if (cur == freelist->lastExt) break;
+      cur = e->xnext;
+    } while (1);
+  }
 
   time_t end = time(0);
-  size_t dups = tconn.count(collDup);
-  size_t nr = tconn.count(collection);
+  size_t dups = writer.nwrited(true);
+  size_t nr = writer.nwrited(false);
   cout << "Recover completed, it recovered " << nr + dups
        << " rows in total in " << end - start << " seconds" << endl;
   cout << "Please check collection " << collection << " for details " << endl;
   if (dups > 0) {
     cout << "There are " << dups << " rows have duplicate key error" << endl;
-    cout << "they were stored in " << collDup
+    cout << "they were stored in " << collection + "Dup"
          << " with its fieldName '_id' changed to " << nid << endl;
     cout << "The real value of _id for these duplicated rows is generated by "
             "c++ "
