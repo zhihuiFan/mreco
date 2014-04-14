@@ -102,7 +102,8 @@ void writer::save(const mongo::BSONObj &data) {
       mongo::BSONObj nobj = rename_id(data, _nid.c_str());
       _conn.insert(_dcoll, nobj);
     } else if (err.find(ierr) != string::npos) {
-      throw 1;  // we may calcluated a wrong bson length, will try again
+      // TODO: find a better way to calcaluate bson length
+      throw 1;
     } else {
       cout << "Inert Error " << err << endl;
       std::exit(4);
@@ -210,6 +211,7 @@ int main(int argc, char **argv) {
             writer.save(o);
           }
           catch (int &i) {
+            // TODO: find a better way to calcaluate bson length
             if (i == 1) {
               reinterpret_cast<unsigned *>(r->data())[0] = len + 2;
               mongo::BSONObj o(r->data());
