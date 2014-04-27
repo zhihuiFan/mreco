@@ -13,9 +13,9 @@ Dependencies:
 
 Compile:
 ---------
-$ git tag -l  (only taged version is tested, these commits after the lastest tag is still in develop)
-$ git checkout v..
-$ scons
+    $ git tag -l  (only taged version is tested, these commits after the lastest tag is still in development)
+    $ git checkout v..
+    $ scons
 
 Usage：
 -----
