@@ -86,13 +86,6 @@ void Database::openAll() {
   }
 }
 
-void Database::getallns(vector<string> &v) {
-  v.reserve(colls.size());
-  for (map<string, Collection *>::iterator it = colls.begin();
-       it != colls.end(); it++)
-    v.push_back(it->first);
-}
-
 void Database::nsscan() {
   string nss = _path + _db + ".ns";
   size_t nslen = flen(nss);
@@ -102,7 +95,6 @@ void Database::nsscan() {
   size_t curops = 0;
   while (curops < nslen) {
     if (curops + chunksize > nslen) {
-      // TODO: why will this happen?
       return;
     }
     int hv = *(int *)(ns + curops);
