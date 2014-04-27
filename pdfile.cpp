@@ -1,4 +1,5 @@
 #include "pdfile.h"
+#include "header.h"
 #include <sys/mman.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -6,36 +7,9 @@
 #include <boost/filesystem.hpp>
 #include <boost/regex.hpp>
 
-DiskLoc Record::nextInExtent(const DiskLoc &myLoc) {
-  if (_nextOfs == DiskLoc::NullOfs) return DiskLoc();
-  assert(_nextOfs);
-  return DiskLoc(myLoc.a(), _nextOfs);
-}
-Record *Extent::getRecord(DiskLoc dl) {
-  if (dl.getOfs() == DiskLoc::NullOfs || dl.isNull()) return NULL;
-  assert(dl.a() == myLoc.a());
-  int x = dl.getOfs() - myLoc.getOfs();
-  assert(x > 0);
-  return (Record *)(((char *)this) + x);
-}
-void Extent::dumpRows(list<mongo::BSONObj> &store) {
-  DiskLoc cur = firstRecord;
-  do {
-    Record *r = getRecord(cur);
-    if (r == NULL) break;
-
-    try {
-      mongo::BSONObj o(r->data());
-      store.push_back(o);
-    }
-    catch (bson::assertion &e) {
-      // cout << e.what();
-      cur.setloc(cur.a(), r->_nextOfs);
-      continue;
-    }
-    if (cur == lastRecord) break;
-    cur.setloc(cur.a(), r->_nextOfs);
-  } while (1);
+Database::Database(string &path, string &db) : _path(path), _db(db) {
+  openAll();
+  nsscan();
 }
 
 void *Database::fmap(const string &filename, size_t len) {
@@ -52,9 +26,9 @@ size_t Database::flen(const string &filename) {
   try {
     len = boost::filesystem::file_size(filename);
   }
-  catch (exception &e) {
+  catch (exception & e) {
     cout << "file size error " << filename << " " << e.what() << endl;
-    return 0;
+    std::exit(-100);
   }
   return len;
 }
@@ -70,7 +44,8 @@ void Database::openAll() {
   int n = 0;
   for (boost::filesystem::directory_iterator i(Path); i != end; i++) {
     const char *filename = i->path().filename().string().c_str();
-    if (boost::regex_search(filename, reg)) n++;
+    if (boost::regex_search(filename, reg))
+      n++;
   }
   filesize.reserve(n);
   mapfiles.reserve(n);
@@ -89,8 +64,7 @@ void Database::openAll() {
 void Database::nsscan() {
   string nss = _path + _db + ".ns";
   size_t nslen = flen(nss);
-  assert(nslen > 0);
-  ns = fmap(nss, nslen);
+  void *ns = fmap(nss, nslen);
   int chunksize = sizeof(chunk);
   size_t curops = 0;
   while (curops < nslen) {
@@ -107,12 +81,14 @@ void Database::nsscan() {
   }
 }
 
-Extent *Database::builtExt(const DiskLoc &loc) {
-  assert(mapfiles[loc.a()]);
+Extent *Database::getExt(const DiskLoc &loc) const {
   return (Extent *)(mapfiles[loc.a()] + loc.getOfs());
 }
 
-Record *Database::builtRow(const DiskLoc &loc) {
-  if (loc.isNull()) return NULL;
+Record *Database::getRec(const DiskLoc &loc) const {
   return (Record *)(mapfiles[loc.a()] + loc.getOfs());
+}
+
+DeletedRecord *Database::getDelRec(const DiskLoc &loc) const {
+  return (DeletedRecord *)(mapfiles[loc.a()] + loc.getOfs());
 }

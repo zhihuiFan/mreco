@@ -1,3 +1,5 @@
+#ifndef _H_HEADER
+#define _H_HEADER
 #include <iostream>
 #include <fstream>
 #include <map>
@@ -11,3 +13,4 @@
 #include <list>
 
 using namespace std;
+#endif

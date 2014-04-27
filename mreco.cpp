@@ -1,11 +1,25 @@
 #include "pdfile.h"
-#include "mreco.h"
 #include <mongo/client/dbclient.h>
 #include <boost/program_options.hpp>
 #include <unistd.h>
 #include <time.h>
 
 namespace po = boost::program_options;
+
+class writer {
+private:
+  mongo::DBClientConnection _conn;
+  string _coll;
+  string _nid;
+  string _dcoll;
+  string ierr;
+  string dupError;
+
+public:
+  writer(const string &target, const string &coll, string &nid);
+  void save(DeletedRecord *dr);
+  void save(Record *r);
+};
 
 const string currentDateTime() {
   time_t now = time(0);
@@ -17,64 +31,66 @@ const string currentDateTime() {
 }
 
 mongo::BSONObj rename_id(const mongo::BSONObj &input, const char *newfield) {
-  if (!input.hasField("_id")) return input;
+  if (!input.hasField("_id"))
+    return input;
   mongo::BSONObjBuilder builder;
   builder.appendElements(input);
 
   mongo::BSONElement e = input.getField("_id");
   switch (e.type()) {
-    case mongo::NumberLong: {
-      long long v;
-      e.Val(v);
-      builder.append(newfield, v);
-      break;
-    }
-    case mongo::NumberDouble: {
-      double v;
-      e.Val(v);
-      builder.append(newfield, v);
-      break;
-    }
-    case mongo::NumberInt: {
-      int v;
-      e.Val(v);
-      builder.append(newfield, v);
-      break;
-    }
-    case mongo::Bool: {
-      bool v;
-      e.Val(v);
-      builder.append(newfield, v);
-      break;
-    }
-    case mongo::String: {
-      string v;
-      e.Val(v);
-      builder.append(newfield, v);
-      break;
-    }
-    case mongo::jstOID: {
-      mongo::OID v;
-      e.Val(v);
-      builder.append(newfield, v);
-      break;
-    }
-    default:
-      ostringstream excep;
-      excep << "unhandled ElementType for _id " << e.type() << endl;
-      throw excep.str();
+  case mongo::NumberLong: {
+    long long v;
+    e.Val(v);
+    builder.append(newfield, v);
+    break;
+  }
+  case mongo::NumberDouble: {
+    double v;
+    e.Val(v);
+    builder.append(newfield, v);
+    break;
+  }
+  case mongo::NumberInt: {
+    int v;
+    e.Val(v);
+    builder.append(newfield, v);
+    break;
+  }
+  case mongo::Bool: {
+    bool v;
+    e.Val(v);
+    builder.append(newfield, v);
+    break;
+  }
+  case mongo::String: {
+    string v;
+    e.Val(v);
+    builder.append(newfield, v);
+    break;
+  }
+  case mongo::jstOID: {
+    mongo::OID v;
+    e.Val(v);
+    builder.append(newfield, v);
+    break;
+  }
+  default:
+    ostringstream excep;
+    excep << "unhandled ElementType for _id " << e.type() << endl;
+    throw excep.str();
   }
   mongo::BSONObj tmp = builder.obj();
   return tmp.removeField("_id");
 }
 
 writer::writer(const string &target, const string &coll, string &nid)
-    : _coll(coll), _dcoll(coll + "Dup"), _nid(nid) {
+    : _coll(coll), _dcoll(coll + "Dup"), _nid(nid), ierr("invalid bson"),
+      dupError("E11000 duplicate key error") {
 
   try {
     _conn.connect(target.c_str());
   }
-  catch (mongo::DBException &e) {
+  catch (mongo::DBException & e) {
     cout << "connect to target ERROR: " << e.what() << endl;
     std::exit(1);
   }
@@ -86,23 +102,21 @@ writer::writer(const string &target, const string &coll, string &nid)
   }
 }
 
-void writer::save(const mongo::BSONObj &data) {
-  const string ierr("invalid bson");
-  const string dupError("E11000 duplicate key error");
-  _conn.insert(_coll, data);
+void writer::save(Record *r) {
+  mongo::BSONObj o(r->data());
+  _conn.insert(_coll, o);
   string err = _conn.getLastError();
   if (!err.empty()) {
     if (err.find(dupError) != string::npos) {
-      if (data.hasField(_nid.c_str())) {
+      if (o.hasField(_nid.c_str())) {
         cout << "some of the recorded data have " << _nid << "fileds\n";
         cout << "please used a different nid with --nid option to recover";
         cout << "exiting now.. " << endl;
         std::exit(2);
       }
-      mongo::BSONObj nobj = rename_id(data, _nid.c_str());
+      mongo::BSONObj nobj = rename_id(o, _nid.c_str());
       _conn.insert(_dcoll, nobj);
     } else if (err.find(ierr) != string::npos) {
-      // TODO: find a better way to calcaluate bson length
       throw 1;
     } else {
       cout << "Inert Error " << err << endl;
@@ -111,10 +125,27 @@ void writer::save(const mongo::BSONObj &data) {
   }
 }
 
-void writer::save(const list<mongo::BSONObj> &data) {
-  list<mongo::BSONObj>::const_iterator end = data.end();
-  for (list<mongo::BSONObj>::const_iterator it = data.begin(); it != end; ++it)
-    save(*it);
+void writer::save(DeletedRecord *dr) {
+  Record *nr = dr->asnormal();
+  int len = nr->datalen();
+  const int clen = len;
+  for (int i = clen - 1; i >= 0; --i) {
+    if (*(char *)(nr->data() + i) == 0) {
+      len--;
+    } else {
+      break;
+    }
+  }
+  reinterpret_cast<unsigned *>(nr->data())[0] = len + 1;
+  try {
+    save(nr);
+  }
+  catch (int & i) {
+    if (i == 1) {
+      reinterpret_cast<unsigned *>(nr->data())[0] = len + 2;
+      save(nr);
+    }
+  }
 }
 
 int main(int argc, char **argv) {
@@ -172,7 +203,8 @@ int main(int argc, char **argv) {
 
   writer writer(target, collection, nid);
 
-  if (dbpath[dbpath.size() - 1] != '/') dbpath.push_back('/');
+  if (dbpath[dbpath.size() - 1] != '/')
+    dbpath.push_back('/');
 
   Database db(dbpath, dbname);
 
@@ -180,85 +212,48 @@ int main(int argc, char **argv) {
   if (vm.count("deleted")) {
     // reocver deleted rows
     if (!vm.count("dcoll")) {
-      cout << "you must specify --dcoll=db.collection if used --deleted"
-           << endl;
+      cout << "you must specify --dcoll=collection if used --deleted" << endl;
       return -3;
     }
-    if (count(delcoll.begin(), delcoll.end(), '.') != 1) {
-      cout << "format --dcoll=db.collection" << endl;
-    }
+    delcoll = dbname + "." + delcoll;
     Collection *target = db.getns(delcoll);
+    DiskLoc *del = target->firstDel();
     for (int i = 0; i < Buckets; ++i) {
-      Record *r = db.builtRow(target->deletedList[i]);
-      if (r == NULL) {
+      DiskLoc dl = *(del + i);
+      if (dl.isNull())
         continue;
-      }
-      int i = 0;
-      while (1) {
-        int len = r->datalen();
-        const int clen = len;
-        for (int i = clen - 1; i >= 0; --i) {
-          if (*(char *)(r->data() + i) == 0) {
-            len--;
-          } else {
-            break;
-          }
-        }
-        reinterpret_cast<unsigned *>(r->data())[0] = len + 1;
-        mongo::BSONObj o(r->data());
-        if (!o.firstElement().eoo()) {
-          try {
-            writer.save(o);
-          }
-          catch (int &i) {
-            // TODO: find a better way to calcaluate bson length
-            if (i == 1) {
-              reinterpret_cast<unsigned *>(r->data())[0] = len + 2;
-              mongo::BSONObj o(r->data());
-              writer.save(o);
-            }
-          }
-        }
-        DeletedRecord *drec = (DeletedRecord *)r;
-        if (drec->_nextDeleted.isNull()) {
-          break;
-        }
-        r = db.builtRow(drec->_nextDeleted);
-      }
+      DeletedRecord *dr = NULL;
+      do {
+        dl = dr->next();
+        dr = db.getDelRec(dl);
+        writer.save(dr);
+      } while (dr->hasmore());
     }
   } else {
     // recover dropped collection
     string fl = dbname + ".$freelist";
     Collection *freelist = db.getns(fl);
+    DiskLoc cur = freelist->firstExt();
+    if (!cur.isNull()) {
+      Extent *ext = NULL;
+      do {
+        cur = ext->next();
+        ext = db.getExt(cur);
+        DiskLoc dl = ext->firstRec();
 
-    DiskLoc cur = freelist->firstExt;
-    do {
-      list<mongo::BSONObj> data;
-      Extent *e = db.builtExt(cur);
-      e->dumpRows(data);
-      writer.save(data);
-      if (!data.empty()) {
-        cout << currentDateTime() << " Recovered " << data.size()
-             << " rows in this extent " << endl;
-      }
-      if (cur == freelist->lastExt) break;
-      cur = e->xnext;
-    } while (1);
-  }
-
-  time_t end = time(0);
-  size_t dups = writer.nwrited(true);
-  size_t nr = writer.nwrited(false);
-  cout << "Recover completed, it recovered " << nr + dups
-       << " rows in total in " << end - start << " seconds" << endl;
-  cout << "Please check collection " << collection << " for details " << endl;
-  if (dups > 0) {
-    cout << "There are " << dups << " rows have duplicate key error" << endl;
-    cout << "they were stored in " << collection + "Dup"
-         << " with its fieldName '_id' changed to " << nid << endl;
-    cout << "The real value of _id for these duplicated rows is generated by "
-            "c++ "
-            "driver automatically" << endl;
+        if (dl.isNull())
+          // there is no record in this Extent
+          continue;
+        Record *r = NULL;
+        do {
+          dl = r->next(cur);
+          if (dl.isNull())
+            break;
+          r = db.getRec(dl);
+          writer.save(r);
+        } while (dl != ext->lastRec());
+      } while (ext->hasmore());
+    }
   }
   return 0;
 }
