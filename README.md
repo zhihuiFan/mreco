@@ -7,7 +7,7 @@ When we use mreco, we also need a mongo instance to store the recovered data.  T
 
 Dependencies:
 ------------
-1. c++ boost library > 4.7
+1. c++ boost library 4.7+
 2. mongo c++ client library
 
 
@@ -19,19 +19,25 @@ Compile:
 
 Usage：
 -----
-1. Recover deleted rows
-> mreco --deleted --db=dbname --dcoll=dbname.collection --dbpath=/data/mongo/data -t abc.vip.xxx.com -c tdb.coll
 
- --deleted:  recovered the deleted rows   
- --dbpath:   the location of mongo data file,  if directoryperdb is used, we need to include db name in the dbpath also.
- -t xxx  :   the target mongo instance
- -c tdb.coll :   the database name and collection name to store the recovered data
+1. Recover deleted rows
+
+    ```sh
+    mreco --deleted --db=dbname --dcoll=dbname.collection --dbpath=/data/mongo/data -t abc.vip.xxx.com -c tdb.coll
+    ```
+    
+    - `--deleted`:  recovered the deleted rows   
+    - `--dbpath`:   the location of mongo data file,  if directoryperdb is used, we need to include db name in the dbpath also.
+    - `-t xxx`:   the target mongo instance
+    - `-c tdb.coll`:   the database name and collection name to store the recovered data
 
  
 2. Recover dropped collection
-> mreco --db=dbname  --dbpath=/data/mongo/data -t abc.vip.xxx.com -c tdb.coll2
-  
-  This will recover all the all the rows in all the dropped collection.  we can't just recover a specialized collection here(I think it is impossible here).  we have to filter out the rows we needed in all the recover data. 
+    ```sh
+    mreco --db=dbname  --dbpath=/data/mongo/data -t abc.vip.xxx.com -c tdb.coll2
+    ```
+
+    This will recover all the all the rows in all the dropped collection.  we can't just recover a specialized collection here(I think it is impossible here).  we have to filter out the rows we needed in all the recover data. 
 
 Bug report:
 -----------
