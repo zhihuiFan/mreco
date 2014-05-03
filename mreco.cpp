@@ -217,6 +217,11 @@ int main(int argc, char **argv) {
     }
     delcoll = dbname + "." + delcoll;
     Collection *target = db.getns(delcoll);
+    if (target == NULL){
+        cout << "can't find out " << delcoll << endl;
+        cout << "is it misspelled? " << endl;
+        std::exit(-4);
+    }
     DiskLoc *del = target->firstDel();
     for (int i = 0; i < Buckets; ++i) {
       DiskLoc dl = *(del + i);
