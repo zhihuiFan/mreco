@@ -150,7 +150,7 @@ class chunk {
 #pragma pack()
 class Database {
  public:
-  Database(string &path, string &db);
+  explicit Database(string &path, string &db);
   string getName() const { return _db; }
   Collection *getns(const string &ns) { return colls[ns]; }
   Extent *getExt(const DiskLoc &loc) const;
