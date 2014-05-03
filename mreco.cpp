@@ -229,10 +229,13 @@ int main(int argc, char **argv) {
         continue;
       DeletedRecord *dr = NULL;
       do {
-        dl = dr->next();
         dr = db.getDelRec(dl);
         writer.save(dr);
-      } while (dr->hasmore());
+        if (dr->hasmore())
+            dl = dr->next();
+        else
+            break;
+      } while (1);
     }
   } else {
     // recover dropped collection
