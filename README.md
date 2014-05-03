@@ -44,9 +44,6 @@ Bug report:
 
 if you find any bugs, please report to zhihuifan@163.com 
 
-It would be my pleasure that this tool can help anyone. 
-
-
 Known Issues:
 -------------
 1. There are some changes after r2.4.6 (73ca6bf23e0d37ee781085466df6c989558c64a3), mreco will not work for the version after r2.4.6

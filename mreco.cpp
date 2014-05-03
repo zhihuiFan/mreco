@@ -7,18 +7,20 @@
 namespace po = boost::program_options;
 
 class writer {
-private:
+ private:
   mongo::DBClientConnection _conn;
   string _coll;
   string _nid;
   string _dcoll;
   string ierr;
   string dupError;
+  size_t nreco;
 
-public:
+ public:
   writer(const string &target, const string &coll, string &nid);
   void save(DeletedRecord *dr);
   void save(Record *r);
+  size_t n() const { return nreco; }
 };
 
 const string currentDateTime() {
@@ -31,78 +33,83 @@ const string currentDateTime() {
 }
 
 mongo::BSONObj rename_id(const mongo::BSONObj &input, const char *newfield) {
-  if (!input.hasField("_id"))
-    return input;
+  if (!input.hasField("_id")) return input;
   mongo::BSONObjBuilder builder;
   builder.appendElements(input);
 
   mongo::BSONElement e = input.getField("_id");
   switch (e.type()) {
-  case mongo::NumberLong: {
-    long long v;
-    e.Val(v);
-    builder.append(newfield, v);
-    break;
-  }
-  case mongo::NumberDouble: {
-    double v;
-    e.Val(v);
-    builder.append(newfield, v);
-    break;
-  }
-  case mongo::NumberInt: {
-    int v;
-    e.Val(v);
-    builder.append(newfield, v);
-    break;
-  }
-  case mongo::Bool: {
-    bool v;
-    e.Val(v);
-    builder.append(newfield, v);
-    break;
-  }
-  case mongo::String: {
-    string v;
-    e.Val(v);
-    builder.append(newfield, v);
-    break;
-  }
-  case mongo::jstOID: {
-    mongo::OID v;
-    e.Val(v);
-    builder.append(newfield, v);
-    break;
-  }
-  default:
-    ostringstream excep;
-    excep << "unhandled ElementType for _id " << e.type() << endl;
-    throw excep.str();
+    case mongo::NumberLong: {
+      long long v;
+      e.Val(v);
+      builder.append(newfield, v);
+      break;
+    }
+    case mongo::NumberDouble: {
+      double v;
+      e.Val(v);
+      builder.append(newfield, v);
+      break;
+    }
+    case mongo::NumberInt: {
+      int v;
+      e.Val(v);
+      builder.append(newfield, v);
+      break;
+    }
+    case mongo::Bool: {
+      bool v;
+      e.Val(v);
+      builder.append(newfield, v);
+      break;
+    }
+    case mongo::String: {
+      string v;
+      e.Val(v);
+      builder.append(newfield, v);
+      break;
+    }
+    case mongo::jstOID: {
+      mongo::OID v;
+      e.Val(v);
+      builder.append(newfield, v);
+      break;
+    }
+    default:
+      ostringstream excep;
+      excep << "unhandled ElementType for _id " << e.type() << endl;
+      throw excep.str();
   }
   mongo::BSONObj tmp = builder.obj();
   return tmp.removeField("_id");
 }
 
 writer::writer(const string &target, const string &coll, string &nid)
-    : _coll(coll), _dcoll(coll + "Dup"), _nid(nid), ierr("invalid bson"),
-      dupError("E11000 duplicate key error") {
+    : _coll(coll),
+      _dcoll(coll + "Dup"),
+      _nid(nid),
+      ierr("invalid bson"),
+      dupError("E11000 duplicate key error"),
+      nreco(0){
 
   try {
     _conn.connect(target.c_str());
   }
-  catch (mongo::DBException & e) {
+  catch (mongo::DBException &e) {
     cout << "connect to target ERROR: " << e.what() << endl;
-    std::exit(1);
+    exit(1);
   }
 
   if (_conn.count(_coll) != 0 || _conn.count(_dcoll) != 0) {
     cout << _coll << " or " << _dcoll << " is not empty! ";
     cout << " Please choose another collect to store the data " << endl;
-    std::exit(2);
+    exit(2);
   }
 }
 
 void writer::save(Record *r) {
+  const int size = *(reinterpret_cast<const int *>(r->data()));
+  if (size <= 0 || size >= mongo::BSONObjMaxInternalSize) return;
   mongo::BSONObj o(r->data());
   _conn.insert(_coll, o);
   string err = _conn.getLastError();
@@ -112,7 +119,7 @@ void writer::save(Record *r) {
         cout << "some of the recorded data have " << _nid << "fileds\n";
         cout << "please used a different nid with --nid option to recover";
         cout << "exiting now.. " << endl;
-        std::exit(2);
+        exit(2);
       }
       mongo::BSONObj nobj = rename_id(o, _nid.c_str());
       _conn.insert(_dcoll, nobj);
@@ -120,9 +127,11 @@ void writer::save(Record *r) {
       throw 1;
     } else {
       cout << "Inert Error " << err << endl;
-      std::exit(4);
+      exit(4);
     }
   }
+  if (++nreco % 100 == 0)
+      cout << currentDateTime() << " recovered " << nreco << "Records " << endl;
 }
 
 void writer::save(DeletedRecord *dr) {
@@ -140,7 +149,7 @@ void writer::save(DeletedRecord *dr) {
   try {
     save(nr);
   }
-  catch (int & i) {
+  catch (int &i) {
     if (i == 1) {
       reinterpret_cast<unsigned *>(nr->data())[0] = len + 2;
       save(nr);
@@ -183,16 +192,6 @@ int main(int argc, char **argv) {
     cout << endl << "mreco is used to recover all the dropped collection in "
                     "the given database " << endl;
     cout << endl << desc << endl;
-    cout << "You can safely ingore the message like this:" << endl;
-    cout << "assertion failure in bson library: 10334 Invalid BSONObj size: "
-            "1666293760 (0x00A05163) first element: : "
-            "ObjectId('00feffffff00000001009400')" << endl;
-    cout << "they are not normal data. maybe index record?  Since these "
-            "message are printed from BSON libary, so I can't avoid them"
-         << endl;
-    cout << endl << "Note:  the program will recover all the data "
-                    "which was dropped in the given database" << endl;
-
     return 0;
   }
 
@@ -203,8 +202,7 @@ int main(int argc, char **argv) {
 
   writer writer(target, collection, nid);
 
-  if (dbpath[dbpath.size() - 1] != '/')
-    dbpath.push_back('/');
+  if (dbpath[dbpath.size() - 1] != '/') dbpath.push_back('/');
 
   Database db(dbpath, dbname);
 
@@ -217,51 +215,62 @@ int main(int argc, char **argv) {
     }
     delcoll = dbname + "." + delcoll;
     Collection *target = db.getns(delcoll);
-    if (target == NULL){
-        cout << "can't find out " << delcoll << endl;
-        cout << "is it misspelled? " << endl;
-        std::exit(-4);
+    if (target == NULL) {
+      cout << "can't find out " << delcoll << endl;
+      cout << "is it misspelled? " << endl;
+      exit(-4);
     }
     DiskLoc *del = target->firstDel();
     for (int i = 0; i < Buckets; ++i) {
       DiskLoc dl = *(del + i);
-      if (dl.isNull())
-        continue;
+      if (dl.isNull()) continue;
       DeletedRecord *dr = NULL;
       do {
         dr = db.getDelRec(dl);
         writer.save(dr);
         if (dr->hasmore())
-            dl = dr->next();
+          dl = dr->next();
         else
-            break;
+          break;
       } while (1);
     }
   } else {
     // recover dropped collection
     string fl = dbname + ".$freelist";
     Collection *freelist = db.getns(fl);
+    if (freelist == NULL) {
+      cout << "FATAL ERROR: can't find " << fl << endl;
+      exit(5);
+    }
     DiskLoc cur = freelist->firstExt();
     if (!cur.isNull()) {
       Extent *ext = NULL;
       do {
-        cur = ext->next();
         ext = db.getExt(cur);
         DiskLoc dl = ext->firstRec();
 
-        if (dl.isNull())
-          // there is no record in this Extent
-          continue;
-        Record *r = NULL;
-        do {
-          dl = r->next(cur);
-          if (dl.isNull())
-            break;
-          r = db.getRec(dl);
-          writer.save(r);
-        } while (dl != ext->lastRec());
-      } while (ext->hasmore());
+        if (!dl.isNull()) {
+          Record *r = NULL;
+          do {
+            if (dl.isNull()) break;
+            r = db.getRec(dl);
+            writer.save(r);
+            if (dl != ext->lastRec())
+              dl = r->next(cur);
+            else
+              break;
+          } while (1);
+        }
+        if (ext->hasmore())
+          cur = ext->next();
+        else
+          break;
+      } while (1);
+    } else {
+      cout << "can't find any dropped collection" << endl;
+      cout << "exiting now" << endl;
     }
   }
+  cout << currentDateTime() << " Recover completed,  totally " << writer.n() << " Records" << endl;
   return 0;
 }

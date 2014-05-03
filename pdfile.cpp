@@ -26,7 +26,7 @@ size_t Database::flen(const string &filename) {
   try {
     len = boost::filesystem::file_size(filename);
   }
-  catch (exception & e) {
+  catch (exception &e) {
     cout << "file size error " << filename << " " << e.what() << endl;
     std::exit(-100);
   }
@@ -44,8 +44,7 @@ void Database::openAll() {
   int n = 0;
   for (boost::filesystem::directory_iterator i(Path); i != end; i++) {
     const char *filename = i->path().filename().string().c_str();
-    if (boost::regex_search(filename, reg))
-      n++;
+    if (boost::regex_search(filename, reg)) n++;
   }
   filesize.reserve(n);
   mapfiles.reserve(n);
