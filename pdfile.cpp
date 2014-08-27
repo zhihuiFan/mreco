@@ -6,6 +6,7 @@
 #include <fcntl.h>
 #include <boost/filesystem.hpp>
 #include <boost/regex.hpp>
+#include <dirent.h>
 
 Database::Database(string &path, string &db) : _path(path), _db(db) {
   openAll();
@@ -37,15 +38,20 @@ void Database::openAll() {
   ostringstream o;
   o << "(^" << _db << "\\.[0-9]+)";
   const boost::regex reg(o.str().c_str());
-
-  boost::filesystem::path Path(_path.c_str());
-  boost::filesystem::directory_iterator end;
-
+  DIR *path = opendir(_path.c_str());
+  struct dirent *subfile;
   int n = 0;
-  for (boost::filesystem::directory_iterator i(Path); i != end; i++) {
-    const char *filename = i->path().filename().string().c_str();
-    if (boost::regex_search(filename, reg)) n++;
+  if (path) {
+    while ((subfile= readdir(path)) != NULL) {
+      if (subfile->d_type == DT_REG) {
+        if (boost::regex_search(subfile->d_name, reg)) n++;
+      }
+    }
+  } else {
+    cout << "can open file " << _path.c_str() << " exit.."  << std::endl;
+    exit(1);
   }
+
   filesize.reserve(n);
   mapfiles.reserve(n);
   for (int i = 0; i < n; ++i) {
