@@ -41,6 +41,7 @@ Usage：
 
 Bug report:
 -----------
+The code of MongoDB changed ofter, this tool has been tested on 2.6.1-;
 
 if you find any bugs, please report to zhihuifan@163.com 
 
