@@ -90,7 +90,7 @@ writer::writer(const string &target, const string &coll, string &nid)
       _nid(nid),
       ierr("invalid bson"),
       dupError("E11000 duplicate key error"),
-      nreco(0){
+      nreco(0) {
 
   try {
     _conn.connect(target.c_str());
@@ -131,7 +131,7 @@ void writer::save(Record *r) {
     }
   }
   if (++nreco % 100 == 0)
-      cout << currentDateTime() << " recovered " << nreco << "Records " << endl;
+    cout << currentDateTime() << " recovered " << nreco << "Records " << endl;
 }
 
 void writer::save(DeletedRecord *dr) {
@@ -236,13 +236,9 @@ int main(int argc, char **argv) {
     }
   } else {
     // recover dropped collection
-    string fl = dbname + ".$freelist";
-    Collection *freelist = db.getns(fl);
-    if (freelist == NULL) {
-      cout << "FATAL ERROR: can't find " << fl << endl;
-      exit(5);
-    }
-    DiskLoc cur = freelist->firstExt();
+    DiskLoc cur = db.getFreelistStart();
+    DiskLoc end = db.getFreelistEnd();
+    Extent* last_ext = db.getExt(end);
     if (!cur.isNull()) {
       Extent *ext = NULL;
       do {
@@ -261,7 +257,7 @@ int main(int argc, char **argv) {
               break;
           } while (1);
         }
-        if (ext->hasmore())
+        if (ext->hasmore() && ext != last_ext)
           cur = ext->next();
         else
           break;
@@ -271,6 +267,7 @@ int main(int argc, char **argv) {
       cout << "exiting now" << endl;
     }
   }
-  cout << currentDateTime() << " Recover completed,  totally " << writer.n() << " Records" << endl;
+  cout << currentDateTime() << " Recover completed,  totally " << writer.n()
+       << " Records" << endl;
   return 0;
 }

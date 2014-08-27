@@ -3,11 +3,11 @@ mreco
 > A tool for recovering dropped collection or deleted rows
 
 mreco will read mongo data file directly to recover deleted rows OR dropped collections. 
-When we use mreco, we also need a mongo instance to store the recovered data.  To make the mreco simple, the mongo instanace have to listen on default port 27017 and no password required when loggin 
+When we use mreco, we also need a mongo instance to store the recovered data.  To make the mreco simple, the mongo instanace have to listen on default port 27017 and no password required when loggin. 
 
 Dependencies:
 ------------
-1. c++ boost library 4.7+
+1. c++ boost library 1.49
 2. mongo c++ client library
 
 
@@ -46,7 +46,6 @@ if you find any bugs, please report to zhihuifan@163.com
 
 Known Issues:
 -------------
-1. There are some changes after r2.4.6 (73ca6bf23e0d37ee781085466df6c989558c64a3), mreco will not work for the version after r2.4.6
 
 
 TODO:

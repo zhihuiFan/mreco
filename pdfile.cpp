@@ -11,6 +11,7 @@
 Database::Database(string &path, string &db) : _path(path), _db(db) {
   openAll();
   nsscan();
+  initFreelistLoc();
 }
 
 void *Database::fmap(const string &filename, size_t len) {
@@ -42,13 +43,13 @@ void Database::openAll() {
   struct dirent *subfile;
   int n = 0;
   if (path) {
-    while ((subfile= readdir(path)) != NULL) {
+    while ((subfile = readdir(path)) != NULL) {
       if (subfile->d_type == DT_REG) {
         if (boost::regex_search(subfile->d_name, reg)) n++;
       }
     }
   } else {
-    cout << "can open file " << _path.c_str() << " exit.."  << std::endl;
+    cout << "can open file " << _path.c_str() << " exit.." << std::endl;
     exit(1);
   }
 
@@ -83,6 +84,18 @@ void Database::nsscan() {
       colls.insert(pair<string, Collection *>(coll, nsp));
     }
     curops = curops + chunksize;
+  }
+}
+
+void Database::initFreelistLoc() {
+  string fl = _db + ".$freelist";
+  Collection *freelist = this->getns(fl);
+  if (freelist) {
+    freelist_start_ = freelist->firstExt();
+    freelist_end_ = freelist->lastExt();
+  } else {
+    freelist_start_ = ((DataFileHeader *)mapfiles[0])->freeListStart;
+    freelist_end_ = ((DataFileHeader *)mapfiles[0])->freeListEnd;
   }
 }
 

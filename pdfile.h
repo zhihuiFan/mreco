@@ -102,8 +102,8 @@ class Extent {
 
 class Collection {
  private:
-  DiskLoc fstExt;
-  DiskLoc lastExt;
+  DiskLoc fstExt_;
+  DiskLoc lastExt_;
 
   DiskLoc deletedList[Buckets];
   // ofs 168 (8 byte aligned)
@@ -137,7 +137,8 @@ class Collection {
   char reserved[72];
 
  public:
-  DiskLoc firstExt() { return fstExt; }
+  DiskLoc firstExt() { return fstExt_; }
+  DiskLoc lastExt() { return lastExt_; }
   DiskLoc *firstDel() { return deletedList; }
 };
 
@@ -147,17 +148,34 @@ class chunk {
   Namespace key;
   Collection ndetails;
 };
+
+struct DataFileHeader {
+  int version;
+  int versionMinor;
+  int fileLength;
+  DiskLoc unused; /*  unused is the portion of the file that doesn't belong to
+                      any allocated extents. -1 = no more */
+  int unusedLength;
+  DiskLoc freeListStart;
+  DiskLoc freeListEnd;
+  char reserved[8192 - 4 * 4 - 8 * 3];
+
+  char data[4];  // first extent starts here
+};
 #pragma pack()
 class Database {
  public:
-  explicit Database(string &path, string &db);
+  Database(string &path, string &db);
   string getName() const { return _db; }
   Collection *getns(const string &ns) { return colls[ns]; }
   Extent *getExt(const DiskLoc &loc) const;
   Record *getRec(const DiskLoc &loc) const;
   DeletedRecord *getDelRec(const DiskLoc &loc) const;
+  DiskLoc getFreelistStart() const { return freelist_start_; }
+  DiskLoc getFreelistEnd() const { return freelist_end_; }
 
  private:
+  void initFreelistLoc();
   void *fmap(const string &filename, size_t len);
   size_t flen(const string &filename);
   void openAll();
@@ -166,6 +184,8 @@ class Database {
  private:
   string _db;
   string _path;
+  DiskLoc freelist_start_;
+  DiskLoc freelist_end_;
   map<string, Collection *> colls;
   vector<void *> mapfiles;
   vector<size_t> filesize;
